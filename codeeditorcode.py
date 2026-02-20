@@ -139,7 +139,7 @@ HTML_UI = r"""
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0c" id="themeMetaColor">
-<title>Dev-X</title>
+<title>Comodo</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 <style>
@@ -367,7 +367,7 @@ body{display:flex;flex-direction:column}
 <div class="topbar">
   <div class="top-row">
     <button class="tbtn" onclick="openDrawer()"><i class="fa-solid fa-bars"></i></button>
-    <div class="logo"><div class="logo-icon">DX</div><div class="logo-text"><span>Dev</span>-X</div></div>
+    <div class="logo"><div class="logo-icon">CM</div><div class="logo-text"><span>Comodo</span></div></div>
     <div class="pname" id="pname"></div>
     <button class="tbtn" id="themeBtn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbtn" onclick="openBS('settingsBS')"><i class="fa-solid fa-gear"></i></button>
@@ -408,7 +408,7 @@ body{display:flex;flex-direction:column}
 </div>
 <div class="shade" id="shade" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
-  <div class="dr-head"><div class="dr-logo"><div class="ic">DX</div><div class="tx"><span>Dev</span>-X</div></div><button class="tbtn" onclick="closeDrawer()"><i class="fa-solid fa-xmark"></i></button></div>
+  <div class="dr-head"><div class="dr-logo"><div class="ic">CM</div><div class="tx"><span>Comodo</span></div></div><button class="tbtn" onclick="closeDrawer()"><i class="fa-solid fa-xmark"></i></button></div>
   <button class="dr-new" onclick="closeDrawer();openBS('newProjBS')"><i class="fa-solid fa-plus"></i> New Project</button>
   <div class="dr-list" id="drList"></div>
 </div>
@@ -440,9 +440,9 @@ function hi(c,tp){let x=esc(c);if(tp==='js'){x=x.replace(SRE,'<s>$&</s>');x=x.re
 function gtp(fn){if(fn.endsWith('.js'))return'js';if(fn.endsWith('.css'))return'css';return'html';}
 
 async function loadCL(){const r=await fetch('/get_history');const d=await r.json();const l=document.getElementById('drList');l.innerHTML='';Object.keys(d.chats).reverse().forEach(id=>{const c=d.chats[id];const e=document.createElement('div');e.className='dr-i'+(id===CID?' on':'');e.innerHTML=`<span class="nm">${esc(c.title)}</span><button class="dl" onclick="event.stopPropagation();confirmAction('Delete project <span class=confirm-highlight>${esc(c.title)}</span>?','delChatConfirmed','${id}')"><i class="fa-solid fa-trash"></i></button>`;e.onclick=()=>{closeDrawer();swChat(id);};l.appendChild(e);});}
-async function loadMsgs(){const r=await fetch('/get_history');const d=await r.json();if(!d.chats[CID])return;const msgs=d.chats[CID].messages;const c=document.getElementById('chatArea');c.innerHTML='';if(!msgs.length){c.innerHTML=`<div class="msg"><div class="av ai">DX</div><div class="mmb"><div class="mh" style="color:var(--ac)">Dev-X</div><div class="mt">Project ready! Tell me what to build.</div></div></div>`;return;}msgs.forEach(m=>{if(m.role==='user')addU(m.content,false);else{const p=parseR(m.content);addA(p.expl,p.diffs,false);}});scr();}
+async function loadMsgs(){const r=await fetch('/get_history');const d=await r.json();if(!d.chats[CID])return;const msgs=d.chats[CID].messages;const c=document.getElementById('chatArea');c.innerHTML='';if(!msgs.length){c.innerHTML=`<div class="msg"><div class="av ai">CM</div><div class="mmb"><div class="mh" style="color:var(--ac)">Comodo</div><div class="mt">Project ready! Tell me what to build.</div></div></div>`;return;}msgs.forEach(m=>{if(m.role==='user')addU(m.content,false);else{const p=parseR(m.content);addA(p.expl,p.diffs,false);}});scr();}
 function addU(t,anim=true){const c=document.getElementById('chatArea');const w=c.querySelector('.welcome');if(w)w.remove();const d=document.createElement('div');d.className='msg';if(!anim)d.style.animation='none';const tm=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});d.innerHTML=`<div class="av u"><i class="fa-solid fa-user" style="font-size:10px"></i></div><div class="mmb"><div class="mh">You <span class="tm">${tm}</span></div><div class="mt">${esc(t)}</div></div>`;c.appendChild(d);}
-function addA(expl,diffs,anim=true){const c=document.getElementById('chatArea');const d=document.createElement('div');d.className='msg';if(!anim)d.style.animation='none';const tm=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});let bd='';diffs.forEach(f=>{bd+=`<div class="fbg" onclick="openF('${f.name}')"><i class="fa-solid fa-file-code" style="color:var(--ac);font-size:10px"></i><span class="fn">${f.name}</span><span class="fg">✓</span></div>`;});d.innerHTML=`<div class="av ai">DX</div><div class="mmb"><div class="mh" style="color:var(--ac)">Dev-X <span class="tm">${tm}</span></div><div class="mt">${fmtChat(expl||'')}</div>${bd?'<div style="margin-top:5px;display:flex;flex-wrap:wrap">'+bd+'</div>':''}</div>`;c.appendChild(d);}
+function addA(expl,diffs,anim=true){const c=document.getElementById('chatArea');const d=document.createElement('div');d.className='msg';if(!anim)d.style.animation='none';const tm=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});let bd='';diffs.forEach(f=>{bd+=`<div class="fbg" onclick="openF('${f.name}')"><i class="fa-solid fa-file-code" style="color:var(--ac);font-size:10px"></i><span class="fn">${f.name}</span><span class="fg">✓</span></div>`;});d.innerHTML=`<div class="av ai">CM</div><div class="mmb"><div class="mh" style="color:var(--ac)">Comodo <span class="tm">${tm}</span></div><div class="mt">${fmtChat(expl||'')}</div>${bd?'<div style="margin-top:5px;display:flex;flex-wrap:wrap">'+bd+'</div>':''}</div>`;c.appendChild(d);}
 
 function fmtChat(t){
   t=t.replace(/---FILE:[\s\S]*?---ENDFILE---/g,'').replace(/---DIFF:[\s\S]*?---ENDDIFF---/g,'');
@@ -468,7 +468,7 @@ function fmtChat(t){
   return t;
 }
 
-function mkWorking(){const c=document.getElementById('chatArea');const d=document.createElement('div');d.className='msg';d.id='workingMsg';d.innerHTML=`<div class="av ai">DX</div><div class="mmb"><div class="mh" style="color:var(--ac)">Dev-X</div><div class="mt"><div class="agent-working"><span>Working</span><div class="aw-dots"><span></span><span></span><span></span></div></div></div></div>`;c.appendChild(d);scr();return d;}
+function mkWorking(){const c=document.getElementById('chatArea');const d=document.createElement('div');d.className='msg';d.id='workingMsg';d.innerHTML=`<div class="av ai">CM</div><div class="mmb"><div class="mh" style="color:var(--ac)">Comodo</div><div class="mt"><div class="agent-working"><span>Working</span><div class="aw-dots"><span></span><span></span><span></span></div></div></div></div>`;c.appendChild(d);scr();return d;}
 
 async function loadFiles(){if(!CID)return;const r=await fetch(`/get_files/${CID}`);PF=await r.json();renderTabs();if(Object.keys(PF).length>0&&(!AF||!PF[AF]))AF=Object.keys(PF)[0];}
 
@@ -562,7 +562,7 @@ async function sendMsg(){
     const uid=Date.now(),cid='s'+uid,did='d'+uid;
     const sd=document.createElement('div');sd.className='msg';
     const tm=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    sd.innerHTML=`<div class="av ai">DX</div><div class="mmb"><div class="mh" style="color:var(--ac)">Dev-X <span class="tm">${tm}</span></div><div class="mt" id="${cid}"><div class="agent-working"><span>Working</span><div class="aw-dots"><span></span><span></span><span></span></div></div></div><div id="${did}" style="margin-top:5px;display:flex;flex-wrap:wrap"></div></div>`;
+    sd.innerHTML=`<div class="av ai">CM</div><div class="mmb"><div class="mh" style="color:var(--ac)">Comodo <span class="tm">${tm}</span></div><div class="mt" id="${cid}"><div class="agent-working"><span>Working</span><div class="aw-dots"><span></span><span></span><span></span></div></div></div><div id="${did}" style="margin-top:5px;display:flex;flex-wrap:wrap"></div></div>`;
     document.getElementById('chatArea').appendChild(sd);
     let sf={},lp={};
     while(true){
@@ -599,7 +599,7 @@ function closeProject(){if(!CID)return;CID='';PF={};AF='';PFC={};PROJ_NAME='';do
 async function createFile(){const v=document.getElementById('nfInp').value.trim();if(!v||!CID)return;closeBS('newFileBS');if(NF_T==='folder')await fetch('/create_folder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:CID,path:v})});else{await fetch('/save_file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:CID,filename:v,content:''})});PF[v]='';AF=v;showFile(AF);renderTabs();}await loadFiles();refreshTree();}
 async function delItemConfirmed(path){await fetch('/delete_item',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:CID,path})});if(PF[path])delete PF[path];if(AF===path)AF=Object.keys(PF)[0]||'';await loadFiles();refreshTree();if(AF)showFile(AF);}
 function toggleChat(on){const g=document.getElementById('goBtn'),i=document.getElementById('inp'),lo=document.getElementById('lockOv'),cb=document.getElementById('chatBar');g.disabled=!on;i.disabled=!on;if(!on){i.placeholder='Open a project first...';lo.classList.add('on');cb.style.display='none';}else{i.placeholder='Describe what to build...';lo.classList.remove('on');cb.style.display='block';}}
-function renderWelcome(){const cs=document.getElementById('chatArea');fetch('/list_projects').then(r=>r.json()).then(proj=>{let cards='';proj.forEach(p=>{cards+=`<div class="dcard" onclick="selectProj('${esc(p)}')"><i class="fa-solid fa-folder"></i><span>${esc(p)}</span></div>`;});cs.innerHTML=`<div class="welcome"><div class="w-icon"><i class="fa-solid fa-bolt" style="color:#fff"></i></div><div class="w-title">Dev-X</div><div class="w-sub">Create or open a project to build with AI</div><div class="dash-box"><div class="dash-form"><input type="text" class="dash-inp" id="dashInp" placeholder="New project name..." onkeydown="if(event.key==='Enter'){selectProj(this.value.trim())}"><button class="dash-go" onclick="const v=document.getElementById('dashInp').value.trim();if(v)selectProj(v)"><i class="fa-solid fa-plus"></i></button></div>${proj.length>0?`<div class="dash-div">Recent</div><div class="dash-grid">${cards}</div>`:''}</div></div>`;});}
+function renderWelcome(){const cs=document.getElementById('chatArea');fetch('/list_projects').then(r=>r.json()).then(proj=>{let cards='';proj.forEach(p=>{cards+=`<div class="dcard" onclick="selectProj('${esc(p)}')"><i class="fa-solid fa-folder"></i><span>${esc(p)}</span></div>`;});cs.innerHTML=`<div class="welcome"><div class="w-icon"><i class="fa-solid fa-bolt" style="color:#fff"></i></div><div class="w-title">Comodo</div><div class="w-sub">Create or open a project to build with AI</div><div class="dash-box"><div class="dash-form"><input type="text" class="dash-inp" id="dashInp" placeholder="New project name..." onkeydown="if(event.key==='Enter'){selectProj(this.value.trim())}"><button class="dash-go" onclick="const v=document.getElementById('dashInp').value.trim();if(v)selectProj(v)"><i class="fa-solid fa-plus"></i></button></div>${proj.length>0?`<div class="dash-div">Recent</div><div class="dash-grid">${cards}</div>`:''}</div></div>`;});}
 async function loadAll(){
   if(!CID){document.getElementById('pname').textContent='';document.getElementById('pname').classList.remove('on');toggleChat(false);renderWelcome();document.getElementById('fList').innerHTML='';document.getElementById('cTabs').innerHTML='';document.getElementById('ceScroll').style.display='none';document.getElementById('cEmpty').style.display='flex';document.getElementById('projRootDisp').style.display='none';await loadCL();go('agent');return;}
   try{const h=await fetch('/get_history');const j=await h.json();if(j.chats[CID]){PROJ_NAME=j.chats[CID].title;document.getElementById('pname').textContent=PROJ_NAME;document.getElementById('pname').classList.add('on');}}catch(e){}
@@ -816,11 +816,11 @@ def ask():
 
 if __name__ == "__main__":
     print(f"\n{Fore.CYAN}{'='*40}")
-    print(f"  🚀 Dev-X Mobile System Ready")
+    print(f"  🚀 Comodo Mobile System Ready")
     print(f"  🔗 Local: http://127.0.0.1:5000")
     print(f"  🔗 Network: http://0.0.0.0:5000")
     print(f"{'='*40}\n")
-    
+
     # threaded=True: Isse mobile browser hang nahi hoga multiple requests par
     # host='0.0.0.0': Isse phone ke hotspot ya wifi network par bhi access ho sakega
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
