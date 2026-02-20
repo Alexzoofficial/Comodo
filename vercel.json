@@ -1,0 +1,18 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/get_history", "destination": "/api/get_history" },
+    { "source": "/list_projects", "destination": "/api/list_projects" },
+    { "source": "/new_chat", "destination": "/api/new_chat" },
+    { "source": "/switch_chat/:id", "destination": "/api/switch_chat?id=:id" },
+    { "source": "/delete_chat/:id", "destination": "/api/delete_chat?id=:id" },
+    { "source": "/get_files/:chat_id", "destination": "/api/get_files?chat_id=:chat_id" },
+    { "source": "/get_tree/:chat_id", "destination": "/api/get_tree?chat_id=:chat_id" },
+    { "source": "/save_file", "destination": "/api/save_file" },
+    { "source": "/create_folder", "destination": "/api/create_folder" },
+    { "source": "/clear_all", "destination": "/api/clear_all" },
+    { "source": "/delete_item", "destination": "/api/delete_item" },
+    { "source": "/ask", "destination": "/api/ask" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

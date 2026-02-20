@@ -13,6 +13,19 @@ init(autoreset=True)
 app = Flask(__name__)
 
 
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = "qwen/qwen3-coder:free"
+OPENROUTER_API_KEY = os.getenv(
+    "OPENROUTER_API_KEY",
+    "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"
+)
+ALEXZO_SEARCH_API_URL = "https://alexzo.vercel.app/api/search"
+ALEXZO_SEARCH_API_KEY = os.getenv(
+    "ALEXZO_SEARCH_API_KEY",
+    "alexzo_d6ld7tundbcpi5bklna74n"
+)
+
+
 
 
 
@@ -28,6 +41,39 @@ if not os.path.exists(PROJECTS_DIR):
 
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
+
+
+
+def should_use_web_search(prompt):
+    if not prompt:
+        return False
+    pattern = (
+        r"\b(latest|today|current|news|recent|update|trend|trending|"
+        r"price|market|release date|advancement|advancements|what is happening)\b"
+    )
+    return re.search(pattern, prompt, re.IGNORECASE) is not None
+
+
+def fetch_web_search_context(query):
+    if not ALEXZO_SEARCH_API_KEY:
+        return ""
+    try:
+        resp = req_lib.post(
+            ALEXZO_SEARCH_API_URL,
+            headers={
+                "Authorization": f"Bearer {ALEXZO_SEARCH_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={"query": query},
+            timeout=20
+        )
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        compact = json.dumps(data, ensure_ascii=False)
+        return compact[:3500]
+    except Exception:
+        return ""
 
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
@@ -765,34 +811,82 @@ def ask():
 
     def generate():
         try:
-            # Call Vercel API with secret token
+            if not OPENROUTER_API_KEY:
+                yield (
+                    "Configuration error: Missing OPENROUTER_API_KEY. "
+                    "Set the token in environment variables."
+                )
+                return
+
+            web_context = ""
+            if should_use_web_search(prompt):
+                search_results = fetch_web_search_context(prompt)
+                if search_results:
+                    web_context = (
+                        "\n\nWeb search context (fresh internet data):\n"
+                        f"{search_results}"
+                    )
+
+            # Call OpenRouter streaming API
             resp = req_lib.post(
-                VERCEL_API_URL,
+                OPENROUTER_API_URL,
                 json={
-                    "prompt": prompt,
-                    "chat_id": chat_id,
-                    "history_str": history_str
+                    "model": OPENROUTER_MODEL,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a coding assistant. Reply with clean, "
+                                "helpful code and explanations. Use web context "
+                                "only when provided."
+                            )
+                        },
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Conversation history:\n{history_str}\n\n"
+                                f"Current user request:\n{prompt}"
+                                f"{web_context}"
+                            )
+                        }
+                    ],
+                    "stream": True
                 },
                 headers={
-                    # Secret token header
-                    "X-Proglantine-Token": Proglantine.TOKEN,
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type": "application/json"
                 },
                 stream=True,
                 timeout=120
             )
 
-            if resp.status_code == 401:
-                yield "Unauthorized: Invalid token"
+            if resp.status_code in (401, 403):
+                yield "Unauthorized: Invalid OpenRouter API key"
                 return
             if resp.status_code != 200:
-                yield f"API Error: {resp.status_code}"
+                yield f"API Error: {resp.status_code} - {resp.text[:300]}"
                 return
 
             full_reply = ""
-            for chunk in resp.iter_content(chunk_size=None):
-                if chunk:
-                    text = chunk.decode('utf-8')
+            for raw_line in resp.iter_lines(decode_unicode=True):
+                if not raw_line:
+                    continue
+                if not raw_line.startswith("data:"):
+                    continue
+                data_line = raw_line[5:].strip()
+                if data_line == "[DONE]":
+                    break
+                try:
+                    payload = json.loads(data_line)
+                except json.JSONDecodeError:
+                    continue
+
+                text = (
+                    payload.get("choices", [{}])[0]
+                    .get("delta", {})
+                    .get("content", "")
+                )
+                if text:
                     full_reply += text
                     yield text
 
