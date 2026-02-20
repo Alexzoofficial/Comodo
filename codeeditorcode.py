@@ -13,14 +13,12 @@ init(autoreset=True)
 app = Flask(__name__)
 
 
-VERCEL_API_URL = os.getenv(
-    "VERCEL_API_URL",
-    "https://proglantine.vercel.app/api/generate"
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = "qwen/qwen3-coder:free"
+OPENROUTER_API_KEY = os.getenv(
+    "OPENROUTER_API_KEY",
+    "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"
 )
-
-
-class Proglantine:
-    TOKEN = os.getenv("PROGLANTINE_TOKEN", "")
 
 
 
@@ -775,41 +773,71 @@ def ask():
 
     def generate():
         try:
-            if not Proglantine.TOKEN:
+            if not OPENROUTER_API_KEY:
                 yield (
-                    "Configuration error: Missing PROGLANTINE_TOKEN. "
+                    "Configuration error: Missing OPENROUTER_API_KEY. "
                     "Set the token in environment variables."
                 )
                 return
 
-            # Call Vercel API with secret token
+            # Call OpenRouter streaming API
             resp = req_lib.post(
-                VERCEL_API_URL,
+                OPENROUTER_API_URL,
                 json={
-                    "prompt": prompt,
-                    "chat_id": chat_id,
-                    "history_str": history_str
+                    "model": OPENROUTER_MODEL,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a coding assistant. Reply with clean, "
+                                "helpful code and explanations."
+                            )
+                        },
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Conversation history:\n{history_str}\n\n"
+                                f"Current user request:\n{prompt}"
+                            )
+                        }
+                    ],
+                    "stream": True
                 },
                 headers={
-                    # Secret token header
-                    "X-Proglantine-Token": Proglantine.TOKEN,
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type": "application/json"
                 },
                 stream=True,
                 timeout=120
             )
 
-            if resp.status_code == 401:
-                yield "Unauthorized: Invalid token"
+            if resp.status_code in (401, 403):
+                yield "Unauthorized: Invalid OpenRouter API key"
                 return
             if resp.status_code != 200:
-                yield f"API Error: {resp.status_code}"
+                yield f"API Error: {resp.status_code} - {resp.text[:300]}"
                 return
 
             full_reply = ""
-            for chunk in resp.iter_content(chunk_size=None):
-                if chunk:
-                    text = chunk.decode('utf-8')
+            for raw_line in resp.iter_lines(decode_unicode=True):
+                if not raw_line:
+                    continue
+                if not raw_line.startswith("data:"):
+                    continue
+                data_line = raw_line[5:].strip()
+                if data_line == "[DONE]":
+                    break
+                try:
+                    payload = json.loads(data_line)
+                except json.JSONDecodeError:
+                    continue
+
+                text = (
+                    payload.get("choices", [{}])[0]
+                    .get("delta", {})
+                    .get("content", "")
+                )
+                if text:
                     full_reply += text
                     yield text
 
