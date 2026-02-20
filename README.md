@@ -1,39 +1,33 @@
-# Comodo (Static Website)
+# Comodo (Website + JS API)
 
-This project is now prepared to behave like a **website** (not backend app) on common static hosts.
+This project is prepared for static hosting and Vercel serverless APIs (JavaScript), so Python backend dependency is not required on Vercel.
 
-## Permanent 404 fix strategy
+## What changed for permanent fix
 
-The repo includes host-specific fallback files so route/path requests resolve to `index.html`:
+- Frontend website is served from `index.html`.
+- Vercel rewrites map old Flask-style routes (like `/ask`, `/new_chat`, `/get_history`) to JS serverless API files under `/api/*`.
+- SPA fallback is still enabled so unknown paths open `index.html`.
 
-- Cloudflare Pages: `_redirects`
-- Netlify: `netlify.toml`
-- Vercel: `vercel.json`
-- Generic static hosts: `404.html` redirect fallback
+## Vercel deploy (step-by-step)
 
-## Deploy settings (step-by-step)
+1. Import this repo in Vercel.
+2. Framework Preset: **Other**
+3. Build Command: **(empty)**
+4. Output Directory: **.**
+5. Environment Variables:
+   - `OPENROUTER_API_KEY`
+   - `ALEXZO_SEARCH_API_KEY`
+6. Deploy.
 
-### 1) Cloudflare Pages
-- Framework preset: **None**
-- Build command: **(leave empty)**
-- Build output directory: **/**
-- Root directory: **/**
+## Cloudflare / Netlify static deploy
 
-### 2) Netlify
-- Build command: **(leave empty)**
-- Publish directory: **.**
-- `netlify.toml` is already configured for SPA-style fallback.
+If you only deploy static hosting (without serverless API), UI loads but chat/file APIs need backend support.
 
-### 3) Vercel
-- Framework preset: **Other**
-- Build command: **(leave empty)**
-- Output directory: **.**
-- `vercel.json` rewrite is already configured.
+- Cloudflare Pages: Framework `None`, Build command empty, Output `/`
+- Netlify: Publish `.` (already in `netlify.toml`)
 
-### 4) GitHub Pages / simple static server
-- Ensure `index.html` exists in root (it does).
-- `404.html` is added to redirect unknown routes back to home.
+## Files
 
-## Notes
-- If a platform still shows 404, confirm it is publishing the **repository root**.
-- This repo also contains `codeeditorcode.py` (Flask), but static hosts will only serve website files unless you deploy Python backend separately.
+- `api/*.js` → JS backend routes for Vercel.
+- `vercel.json` → rewrites old endpoints to JS APIs + SPA fallback.
+- `codeeditorcode.py` → legacy/local Flask version (optional, not required for Vercel).
