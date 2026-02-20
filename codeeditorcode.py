@@ -17,6 +17,32 @@ app = Flask(__name__)
 
 
 # ============================================
+# API Configuration
+# ============================================
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "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")
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+AI_MODEL = os.environ.get("AI_MODEL", "qwen/qwen3-coder:free")
+SEARCH_API_KEY = os.environ.get("SEARCH_API_KEY", "alexzo_d6ld7tundbcpi5bklna74n")
+SEARCH_API_URL = "https://alexzo.vercel.app/api/search"
+
+def web_search(query):
+    try:
+        resp = req_lib.post(
+            SEARCH_API_URL,
+            json={"query": query},
+            headers={
+                "Authorization": f"Bearer {SEARCH_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            timeout=15
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return {"error": f"Search API error: {resp.status_code}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+# ============================================
 # File / Memory helpers (same as before)
 # ============================================
 MEMORY_FILE = "mission_logs.json"
@@ -757,44 +783,71 @@ def ask():
                 f"---FILE:{fname}---\n{content}\n---ENDFILE---\n"
             )
 
-    history = "\n".join([
-        f"{m['role']}: {m['content'][:200]}"
-        for m in chat['messages'][-6:]
-    ])
-    history_str = history + files_context
+    # Search logic
+    search_keywords = ["search", "find", "latest", "current", "news", "who is", "weather", "today"]
+    needs_search = any(kw in prompt.lower() for kw in search_keywords)
+
+    search_results = ""
+    if needs_search:
+        res = web_search(prompt)
+        if isinstance(res, dict) and "results" in res:
+            search_results = "\n\nWeb Search Results:\n" + json.dumps(res["results"], indent=2)
+        elif isinstance(res, list):
+            search_results = "\n\nWeb Search Results:\n" + json.dumps(res, indent=2)
+        else:
+            search_results = f"\n\nWeb Search Results: {res}"
+
+    messages = [
+        {"role": "system", "content": f"You are Comodo, an extremely skilled software engineer. You help users build projects. Provide code in ---FILE:filename--- content ---ENDFILE--- or ---DIFF:filename--- content ---ENDDIFF--- format.{search_results}"},
+    ]
+
+    for m in chat['messages'][-10:]:
+        messages.append({"role": m['role'], "content": m['content']})
+
+    user_msg = prompt
+    if files_context:
+        user_msg += "\n\n" + files_context
+    messages.append({"role": "user", "content": user_msg})
 
     def generate():
         try:
-            # Call Vercel API with secret token
             resp = req_lib.post(
-                VERCEL_API_URL,
+                OPENROUTER_API_URL,
                 json={
-                    "prompt": prompt,
-                    "chat_id": chat_id,
-                    "history_str": history_str
+                    "model": AI_MODEL,
+                    "messages": messages,
+                    "stream": True
                 },
                 headers={
-                    # Secret token header
-                    "X-Proglantine-Token": Proglantine.TOKEN,
-                    "Content-Type": "application/json"
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://comodo.dev", # Optional
+                    "X-Title": "Comodo Editor" # Optional
                 },
                 stream=True,
                 timeout=120
             )
 
-            if resp.status_code == 401:
-                yield "Unauthorized: Invalid token"
-                return
             if resp.status_code != 200:
-                yield f"API Error: {resp.status_code}"
+                yield f"API Error: {resp.status_code} - {resp.text}"
                 return
 
             full_reply = ""
-            for chunk in resp.iter_content(chunk_size=None):
-                if chunk:
-                    text = chunk.decode('utf-8')
-                    full_reply += text
-                    yield text
+            for line in resp.iter_lines():
+                if line:
+                    line_text = line.decode('utf-8')
+                    if line_text.startswith("data: "):
+                        data_str = line_text[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            data_json = json.loads(data_str)
+                            delta = data_json['choices'][0]['delta'].get('content', '')
+                            if delta:
+                                full_reply += delta
+                                yield delta
+                        except:
+                            continue
 
             # Save to memory
             db = load_memory()
