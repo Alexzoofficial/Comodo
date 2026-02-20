@@ -19,6 +19,11 @@ OPENROUTER_API_KEY = os.getenv(
     "OPENROUTER_API_KEY",
     "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"
 )
+ALEXZO_SEARCH_API_URL = "https://alexzo.vercel.app/api/search"
+ALEXZO_SEARCH_API_KEY = os.getenv(
+    "ALEXZO_SEARCH_API_KEY",
+    "alexzo_d6ld7tundbcpi5bklna74n"
+)
 
 
 
@@ -36,6 +41,39 @@ if not os.path.exists(PROJECTS_DIR):
 
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
+
+
+
+def should_use_web_search(prompt):
+    if not prompt:
+        return False
+    pattern = (
+        r"\b(latest|today|current|news|recent|update|trend|trending|"
+        r"price|market|release date|advancement|advancements|what is happening)\b"
+    )
+    return re.search(pattern, prompt, re.IGNORECASE) is not None
+
+
+def fetch_web_search_context(query):
+    if not ALEXZO_SEARCH_API_KEY:
+        return ""
+    try:
+        resp = req_lib.post(
+            ALEXZO_SEARCH_API_URL,
+            headers={
+                "Authorization": f"Bearer {ALEXZO_SEARCH_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={"query": query},
+            timeout=20
+        )
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        compact = json.dumps(data, ensure_ascii=False)
+        return compact[:3500]
+    except Exception:
+        return ""
 
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
@@ -780,6 +818,15 @@ def ask():
                 )
                 return
 
+            web_context = ""
+            if should_use_web_search(prompt):
+                search_results = fetch_web_search_context(prompt)
+                if search_results:
+                    web_context = (
+                        "\n\nWeb search context (fresh internet data):\n"
+                        f"{search_results}"
+                    )
+
             # Call OpenRouter streaming API
             resp = req_lib.post(
                 OPENROUTER_API_URL,
@@ -790,7 +837,8 @@ def ask():
                             "role": "system",
                             "content": (
                                 "You are a coding assistant. Reply with clean, "
-                                "helpful code and explanations."
+                                "helpful code and explanations. Use web context "
+                                "only when provided."
                             )
                         },
                         {
@@ -798,6 +846,7 @@ def ask():
                             "content": (
                                 f"Conversation history:\n{history_str}\n\n"
                                 f"Current user request:\n{prompt}"
+                                f"{web_context}"
                             )
                         }
                     ],
