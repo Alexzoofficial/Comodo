@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0c" id="themeMetaColor">
 <title>Comodo</title>
+<link rel="manifest" href="/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 <style>
@@ -283,6 +284,83 @@ body{display:flex;flex-direction:column}
 <div class="bsheet" id="confirmBS"><div class="bs-bg" onclick="closeBS('confirmBS')"></div><div class="bs-body"><div class="confirm-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="confirm-text" id="confirmText"></div><div class="bs-btns"><button class="bs-b sec" onclick="closeBS('confirmBS')">Cancel</button><button class="bs-b danger" id="confirmOkBtn">Delete</button></div></div></div>
 
 <script>
+const IS_CLOUD = window.location.hostname.includes('.pages.dev');
+const storage = {
+  get(key, def={}) { return JSON.parse(localStorage.getItem(key) || JSON.stringify(def)); },
+  set(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+};
+const originalFetch = window.fetch;
+window.fetch = async (url, opts={}) => {
+  if (!IS_CLOUD || url === '/ask' || url.startsWith('http')) return originalFetch(url, opts);
+  if (url === '/get_history') {
+    return { ok:true, json: async () => storage.get('comodo_mem', {chats:{}, current_chat:null, projects:{}}) };
+  }
+  if (url.startsWith('/get_files/')) {
+    const cid = url.split('/').pop();
+    return { ok:true, json: async () => storage.get('comodo_files_'+cid, {}) };
+  }
+  if (url.startsWith('/get_tree/')) {
+    const cid = url.split('/').pop();
+    const files = storage.get('comodo_files_'+cid, {});
+    const tree = Object.keys(files).map(p => ({type:'file', name:p.split('/').pop(), path:p}));
+    return { ok:true, json: async () => tree };
+  }
+  if (url === '/new_chat') {
+    const body = JSON.parse(opts.body);
+    const id = 'c' + Date.now();
+    const db = storage.get('comodo_mem', {chats:{}, current_chat:null, projects:{}});
+    db.chats[id] = {title: body.project_name, messages:[]};
+    db.projects[body.project_name] = id;
+    db.current_chat = id;
+    storage.set('comodo_mem', db);
+    return { ok:true, json: async () => ({chat_id: id, project_name: body.project_name}) };
+  }
+  if (url === '/save_file') {
+    const body = JSON.parse(opts.body);
+    const files = storage.get('comodo_files_'+body.chat_id, {});
+    files[body.filename] = body.content;
+    storage.set('comodo_files_'+body.chat_id, files);
+    const db = storage.get('comodo_mem');
+    if(db.chats[body.chat_id]) {
+        db.chats[body.chat_id].messages.push({role:'system', content: 'Saved ' + body.filename, type:'file'});
+        storage.set('comodo_mem', db);
+    }
+    return { ok:true, json: async () => ({added:1}) };
+  }
+  if (url.startsWith('/switch_chat/')) {
+    const id = url.split('/').pop();
+    const db = storage.get('comodo_mem');
+    db.current_chat = id;
+    storage.set('comodo_mem', db);
+    return { ok:true, json: async () => ({success:true}) };
+  }
+  if (url.startsWith('/delete_chat/')) {
+    const id = url.split('/').pop();
+    const db = storage.get('comodo_mem');
+    if (db.chats[id]) {
+      const title = db.chats[id].title;
+      delete db.chats[id];
+      if (db.projects[title]) delete db.projects[title];
+      if (db.current_chat === id) db.current_chat = null;
+      storage.set('comodo_mem', db);
+      localStorage.removeItem('comodo_files_' + id);
+    }
+    return { ok:true, json: async () => ({success:true}) };
+  }
+  if (url === '/clear_all') {
+    storage.set('comodo_mem', {chats:{}, current_chat:null, projects:{}});
+    return { ok:true, json: async () => ({success:true}) };
+  }
+  if (url === '/delete_item') {
+    const body = JSON.parse(opts.body);
+    const files = storage.get('comodo_files_'+body.chat_id, {});
+    if (files[body.path]) delete files[body.path];
+    storage.set('comodo_files_'+body.chat_id, files);
+    return { ok:true, json: async () => ({status:'deleted'}) };
+  }
+  return originalFetch(url, opts);
+};
+
 let CID='',PF={},AF='',STR=false,PFC={},CON=false,NF_T='file',TAB='agent',FP_OPEN=false,EXP={},PROJ_NAME='',DARK=true,PROJ_EXP=true;
 
 function confirmAction(msg,cbName,extra){document.getElementById('confirmText').innerHTML=msg;document.getElementById('confirmOkBtn').onclick=function(){closeBS('confirmBS');if(cbName==='clearAllConfirmed')clearAllConfirmed();else if(cbName==='delChatConfirmed')delChatConfirmed(extra);else if(cbName==='delItemConfirmed')delItemConfirmed(extra);};openBS('confirmBS');}
@@ -447,6 +525,14 @@ async function sendMsg(){
     await loadFiles();if(AF&&PF[AF])renderCode(AF,PF[AF],true);
     if(document.getElementById('autoPrev').classList.contains('on')&&fd.length>0){setTimeout(()=>{go('preview');},400);}
     await loadCL();await refreshTree();
+    if(IS_CLOUD) {
+        const db = storage.get('comodo_mem');
+        if(db.chats[CID]) {
+            db.chats[CID].messages.push({role:'user', content:txt});
+            db.chats[CID].messages.push({role:'assistant', content:full_reply});
+            storage.set('comodo_mem', db);
+        }
+    }
   }catch(e){thk?.remove();addA('Something went wrong.',[],true);}
   STR=false;document.getElementById('goBtn').disabled=false;scr();
 }
@@ -472,6 +558,15 @@ async function loadAll(){
 }
 async function init(){const r=await fetch('/get_history');const d=await r.json();CID=(!d.current_chat||!d.chats[d.current_chat])?'':d.current_chat;await loadAll();}
 init();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      console.log('SW registered:', reg);
+    }).catch(err => {
+      console.log('SW registration failed:', err);
+    });
+  });
+}
 </script>
 </body>
 </html>

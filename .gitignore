@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*$py.class
+app.log
+mission_logs.json
+dev-projects/
+.env
