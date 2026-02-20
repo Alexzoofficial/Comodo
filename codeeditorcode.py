@@ -13,6 +13,16 @@ init(autoreset=True)
 app = Flask(__name__)
 
 
+VERCEL_API_URL = os.getenv(
+    "VERCEL_API_URL",
+    "https://proglantine.vercel.app/api/generate"
+)
+
+
+class Proglantine:
+    TOKEN = os.getenv("PROGLANTINE_TOKEN", "")
+
+
 
 
 
@@ -765,6 +775,13 @@ def ask():
 
     def generate():
         try:
+            if not Proglantine.TOKEN:
+                yield (
+                    "Configuration error: Missing PROGLANTINE_TOKEN. "
+                    "Set the token in environment variables."
+                )
+                return
+
             # Call Vercel API with secret token
             resp = req_lib.post(
                 VERCEL_API_URL,
