@@ -4,6 +4,7 @@ import time
 import sys
 import re
 import os
+from datetime import datetime, timezone
 from flask import Flask, render_template_string, request, Response, jsonify
 import requests as req_lib
 from colorama import Fore, init
@@ -28,6 +29,102 @@ if not os.path.exists(PROJECTS_DIR):
 
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
+
+# ============================================
+# LLM / Search config
+# ============================================
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen3-coder:free")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
+ALEXZO_SEARCH_URL = os.getenv(
+    "ALEXZO_SEARCH_URL",
+    "https://alexzo.vercel.app/api/search"
+)
+ALEXZO_API_KEY = (
+    os.getenv("ALEXZO_API_KEY", "")
+    or os.getenv("ALEXZO_TOKEN", "")
+)
+
+WEB_SEARCH_PATTERNS = (
+    r"\blatest\b", r"\bnews\b", r"\bcurrent\b", r"\brecent\b",
+    r"\btrending\b", r"\bweb search\b", r"\bsearch (on|the) web\b",
+    r"\bonline search\b", r"\binternet se\b", r"\bweb se\b",
+    r"\baaj ki\b", r"\btaaza\b", r"\breal[ -]?time\b"
+)
+
+
+def should_use_web_search(prompt):
+    p = (prompt or "").lower().strip()
+    return any(re.search(pattern, p) for pattern in WEB_SEARCH_PATTERNS)
+
+
+def fetch_web_search_context(query):
+    if not ALEXZO_API_KEY:
+        return ""
+    try:
+        res = req_lib.post(
+            ALEXZO_SEARCH_URL,
+            headers={
+                "Authorization": f"Bearer {ALEXZO_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={"query": query},
+            timeout=30
+        )
+        if res.status_code != 200:
+            return ""
+        data = res.json()
+        return json.dumps(data, ensure_ascii=False, indent=2)[:6000]
+    except Exception:
+        return ""
+
+
+def call_openrouter(prompt, history_messages, files_context, web_context=""):
+    system_prompt = (
+        "You are Dev-X, an expert coding assistant. "
+        "Always provide practical, implementation-ready responses. "
+        "When editing code, include concise explanation and exact file changes."
+    )
+
+    user_content = prompt
+    if files_context:
+        user_content += f"\n\nProject files context:\n{files_context}"
+    if web_context:
+        user_content += (
+            "\n\nWeb search context (use only if relevant and mention it may be fresh):\n"
+            f"{web_context}"
+        )
+
+    payload = {
+        "model": OPENROUTER_MODEL,
+        "messages": [{"role": "system", "content": system_prompt}] + history_messages + [
+            {"role": "user", "content": user_content}
+        ],
+        "temperature": 0.2
+    }
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://cloudflarepages.com",
+        "X-Title": "Dev-X"
+    }
+
+    res = req_lib.post(
+        OPENROUTER_API_URL,
+        json=payload,
+        headers=headers,
+        timeout=120
+    )
+    if res.status_code >= 400:
+        body = res.text[:500]
+        raise RuntimeError(f"OpenRouter error {res.status_code}: {body}")
+    data = res.json()
+    choices = data.get("choices") or []
+    if not choices:
+        raise RuntimeError("OpenRouter returned no choices")
+    return choices[0].get("message", {}).get("content", "")
 
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
@@ -729,12 +826,14 @@ def delete_item():
 @app.route('/ask', methods=['POST'])
 def ask():
     data = request.json
-    prompt = data.get('prompt')
+    prompt = (data.get('prompt') or '').strip()
     chat_id = data.get('chat_id')
     is_file = data.get('is_file')
 
     if not chat_id:
         return jsonify({"error": "No Project ID"}), 400
+    if not prompt:
+        return jsonify({"error": "Prompt is required"}), 400
 
     mem = load_memory()
     if chat_id not in mem['chats']:
@@ -757,44 +856,35 @@ def ask():
                 f"---FILE:{fname}---\n{content}\n---ENDFILE---\n"
             )
 
-    history = "\n".join([
-        f"{m['role']}: {m['content'][:200]}"
+    history_messages = [
+        {
+            "role": m.get("role", "user"),
+            "content": m.get("content", "")[:2000]
+        }
         for m in chat['messages'][-6:]
-    ])
-    history_str = history + files_context
+        if m.get("role") in ("user", "assistant") and m.get("content")
+    ]
 
     def generate():
         try:
-            # Call Vercel API with secret token
-            resp = req_lib.post(
-                VERCEL_API_URL,
-                json={
-                    "prompt": prompt,
-                    "chat_id": chat_id,
-                    "history_str": history_str
-                },
-                headers={
-                    # Secret token header
-                    "X-Proglantine-Token": Proglantine.TOKEN,
-                    "Content-Type": "application/json"
-                },
-                stream=True,
-                timeout=120
+            if not OPENROUTER_API_KEY:
+                yield "Configuration error: OPENROUTER_API_KEY missing"
+                return
+
+            web_context = ""
+            if should_use_web_search(prompt):
+                web_payload = fetch_web_search_context(prompt)
+                if web_payload:
+                    stamp = datetime.now(timezone.utc).isoformat()
+                    web_context = f"Fetched at {stamp}\n{web_payload}"
+
+            full_reply = call_openrouter(
+                prompt=prompt,
+                history_messages=history_messages,
+                files_context=files_context,
+                web_context=web_context
             )
-
-            if resp.status_code == 401:
-                yield "Unauthorized: Invalid token"
-                return
-            if resp.status_code != 200:
-                yield f"API Error: {resp.status_code}"
-                return
-
-            full_reply = ""
-            for chunk in resp.iter_content(chunk_size=None):
-                if chunk:
-                    text = chunk.decode('utf-8')
-                    full_reply += text
-                    yield text
+            yield full_reply
 
             # Save to memory
             db = load_memory()
